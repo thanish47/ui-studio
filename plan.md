@@ -304,10 +304,9 @@ This same hierarchy is reused for:
 ```ts
 interface AppSpecJSON {
   name: string;
-  layout: "single-page" | "routed";
+  layout: "single-page" | "routed";  // Single source of truth for routing
   routing?: {
-    enabled: boolean;
-    type: "hash" | "browser";
+    type: "hash" | "browser";       // Optional: routing type (only used if layout === 'routed')
   };
   contexts?: ContextSpec[];  // NEW: Shared state
   errorBoundary?: {          // NEW: Error handling
@@ -373,6 +372,7 @@ interface FolderSpecJSON {
 interface ComponentSpecJSON {
   id: string;
   name: string;
+  parentId?: string;            // ID of parent folder (if in a feature folder)
   props: PropDef[];
   events?: EventDef[];
   localState?: StateDef[];
@@ -523,9 +523,7 @@ describe("UserProfile", () => {
 ### Structural Rules
 - Graph must be a valid tree (no cycles)
 - All referenced IDs must exist
-- Router requires both:
-  - `settings.router === true`
-  - `appSpec.routing.enabled === true`
+- Routing: `appSpec.layout === 'routed'` is the single source of truth
 - Context references: `consumesContexts` must reference valid context IDs
 - State bindings: All `{variable}` references must exist in props/state/context
 

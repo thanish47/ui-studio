@@ -503,10 +503,11 @@ export function AppPreview({ instance }: Props) {
 
   return (
     <div className="app-preview">
-      <PreviewHeader />
+      <PreviewHeader instance={instance} />
       <PreviewErrorBoundary>
         <MockProvider instance={instance} component={getRootComponent()}>
           <div className="preview-canvas">
+            {/* Single source of truth: appSpec.layout */}
             {instance.appSpec.layout === 'routed' ? (
               <Router current={currentRoute} onChange={setCurrentRoute}>
                 <AppRouter instance={instance} />

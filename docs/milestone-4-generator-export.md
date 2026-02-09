@@ -26,11 +26,11 @@ Implement the code generator that converts InstanceJSON to a production-ready Re
 
 #### 1.1 `fileTree.ts` - Main file tree generator
 ```typescript
-export function generateFileTree(instance: InstanceJSON): Record<string, string> {
+export async function generateFileTree(instance: InstanceJSON): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
 
-  // Validate instance first
-  const errors = validateInstance(instance);
+  // Validate instance first - returns array of errors
+  const errors = validateForExport(instance);
   if (errors.length > 0) {
     throw new Error(`Validation failed: ${errors.map(e => e.message).join(', ')}`);
   }
@@ -66,14 +66,20 @@ export function generateFileTree(instance: InstanceJSON): Record<string, string>
     files['src/contexts/index.ts'] = generateContextsBarrel(instance.contexts);
   }
 
-  // Generate components
+  // Generate folders and components (respecting tree structure)
+  instance.folders.forEach((folder) => {
+    const folderFiles = generateFolder(folder, instance);
+    Object.assign(files, folderFiles);
+  });
+
+  // Generate components (organize by parent folder)
   instance.components.forEach((component) => {
     const componentFiles = generateComponent(component, instance);
     Object.assign(files, componentFiles);
   });
 
-  // Generate components barrel export
-  files['src/components/index.ts'] = generateComponentsBarrel(instance.components);
+  // Generate top-level components barrel export
+  files['src/components/index.ts'] = generateComponentsBarrel(instance.components.filter(c => !c.parentId));
 
   // Generate services
   instance.services.forEach((service) => {
@@ -86,20 +92,28 @@ export function generateFileTree(instance: InstanceJSON): Record<string, string>
     files['src/services/index.ts'] = generateServicesBarrel(instance.services);
   }
 
-  // Format all TypeScript/TSX files with Prettier
-  return formatFiles(files);
+  // Format all TypeScript/TSX files with Prettier (async in v3)
+  return await formatFiles(files);
 }
 ```
 
 #### 1.2 `validator.ts` - Pre-export validation
 ```typescript
 export function validateForExport(instance: InstanceJSON): ValidationError[] {
+  // Collect all validation errors
   return [
     ...validateNamingConventions(instance),
     ...validateReferences(instance),
     ...validatePerformanceLimits(instance),
     ...validateRoutingConfig(instance),
   ];
+}
+
+export interface ValidationError {
+  type: 'VALIDATION_ERROR' | 'PERFORMANCE' | 'REFERENCE' | 'NAMING';
+  message: string;
+  path?: string;
+  fix?: () => void;
 }
 ```
 
@@ -147,10 +161,16 @@ export function generatePackageJson(instance: InstanceJSON): string {
     },
   };
 
-  // Add react-router if routing enabled
-  if (instance.appSpec.routing?.enabled) {
+  // Add react-router if routing enabled (check layout field)
+  if (instance.appSpec.layout === 'routed') {
     pkg.dependencies['react-router-dom'] = '^6.20.0';
     pkg.devDependencies['@types/react-router-dom'] = '^5.3.3';
+  }
+
+  // Add axios if any service uses HTTP
+  const hasHttpServices = instance.services.some(s => s.http);
+  if (hasHttpServices) {
+    pkg.dependencies['axios'] = '^1.6.0';
   }
 
   return JSON.stringify(pkg, null, 2);
@@ -186,11 +206,55 @@ export default defineConfig({
 
 ---
 
-### 3. Component Generator (src/generator/components/)
+### 3. Folder & Component Generator (src/generator/components/)
 
 **Files to create:**
 
-#### 3.1 `componentGenerator.ts`
+#### 3.1 `folderGenerator.ts` - Generate folder structure
+```typescript
+export function generateFolder(
+  spec: FolderSpecJSON,
+  instance: InstanceJSON
+): Record<string, string> {
+  const files: Record<string, string> = {};
+  const folderPath = `src/features/${spec.name}`;
+
+  // Generate barrel export if enabled
+  if (spec.barrelExport) {
+    const componentsInFolder = instance.components.filter(c => c.parentId === spec.id);
+    files[`${folderPath}/index.ts`] = generateFolderBarrel(componentsInFolder);
+  }
+
+  // Generate folder-level test if enabled
+  if (spec.hasTest) {
+    files[`${folderPath}/${spec.name}.spec.tsx`] = generateFolderTest(spec, instance);
+  }
+
+  return files;
+}
+
+function generateFolderBarrel(components: ComponentSpecJSON[]): string {
+  const exports = components.map(c => `export * from './components/${c.name}';`).join('\n');
+  return exports || '// No exports';
+}
+
+function generateFolderTest(spec: FolderSpecJSON, instance: InstanceJSON): string {
+  const entryComponent = instance.components.find(c => c.parentId === spec.id);
+  if (!entryComponent) return '';
+
+  return `import { render } from '@testing-library/react';
+import { ${entryComponent.name} } from './components/${entryComponent.name}';
+
+describe('${spec.name} feature', () => {
+  it('renders entry component', () => {
+    render(<${entryComponent.name} />);
+  });
+});
+`;
+}
+```
+
+#### 3.2 `componentGenerator.ts`
 ```typescript
 export function generateComponent(
   spec: ComponentSpecJSON,
@@ -198,15 +262,30 @@ export function generateComponent(
 ): Record<string, string> {
   const files: Record<string, string> = {};
 
+  // Determine the correct path based on parent folder
+  const basePath = getComponentPath(spec, instance);
+
   // Generate component file
-  files[`src/components/${spec.name}.tsx`] = generateComponentFile(spec, instance);
+  files[`${basePath}/${spec.name}.tsx`] = generateComponentFile(spec, instance);
 
   // Generate test file (if testLevel !== "none")
   if (spec.testLevel !== 'none') {
-    files[`src/components/${spec.name}.spec.tsx`] = generateComponentTest(spec);
+    files[`${basePath}/${spec.name}.spec.tsx`] = generateComponentTest(spec);
   }
 
   return files;
+}
+
+function getComponentPath(spec: ComponentSpecJSON, instance: InstanceJSON): string {
+  // If component has a parent folder, use features/<folder>/components
+  if (spec.parentId) {
+    const folder = instance.folders.find(f => f.id === spec.parentId);
+    if (folder) {
+      return `src/features/${folder.name}/components`;
+    }
+  }
+  // Otherwise, use top-level components folder
+  return 'src/components';
 }
 
 function generateComponentFile(spec: ComponentSpecJSON, instance: InstanceJSON): string {
@@ -218,7 +297,7 @@ function generateComponentFile(spec: ComponentSpecJSON, instance: InstanceJSON):
 
 ${propsInterface}
 
-export function ${spec.name}(${spec.props.length > 0 ? 'props' : ''}: ${spec.name}Props) {
+export function ${spec.name}(${spec.props.length > 0 ? `props: ${spec.name}Props` : ''}) {
   ${generateStateHooks(spec.localState)}
   ${generateContextConsumption(spec.consumesContexts, instance)}
 
@@ -377,14 +456,28 @@ describe('${spec.name}', () => {
 `;
 }
 
+function getDefaultValueForType(type: string): any {
+  if (type.includes('string')) return '';
+  if (type.includes('number')) return 0;
+  if (type.includes('boolean')) return false;
+  if (type.includes('[]')) return [];
+  return null;
+}
+
 function generateFullTest(spec: ComponentSpecJSON): string {
+  const requiredProps = spec.props
+    .filter((p) => p.required)
+    .map((p) => `${p.name}={${JSON.stringify(p.defaultValue || getDefaultValueForType(p.type))}}`)
+    .join(' ');
+
   // Generate more comprehensive tests including interaction tests
   return `import { render, screen, fireEvent } from '@testing-library/react';
+import { vi } from 'vitest';
 import { ${spec.name} } from './${spec.name}';
 
 describe('${spec.name}', () => {
   it('renders without crashing', () => {
-    render(<${spec.name} />);
+    render(<${spec.name} ${requiredProps} />);
   });
 
   ${spec.events
@@ -392,7 +485,7 @@ describe('${spec.name}', () => {
       (event) => `
   it('handles ${event.handler}', () => {
     const ${event.handler} = vi.fn();
-    render(<${spec.name} ${event.name}={${event.handler}} />);
+    render(<${spec.name} ${event.name}={${event.handler}} ${requiredProps} />);
     // Trigger event and assert
   });`
     )
@@ -588,7 +681,8 @@ export function App() {
 function generateAppImports(instance: InstanceJSON): string {
   const imports = ["import React from 'react';"];
 
-  if (instance.appSpec.routing?.enabled) {
+  // Check layout field (single source of truth for routing)
+  if (instance.appSpec.layout === 'routed') {
     imports.push("import { BrowserRouter, Routes, Route } from 'react-router-dom';");
   }
 
@@ -602,7 +696,8 @@ function generateAppImports(instance: InstanceJSON): string {
 }
 
 function generateAppBody(instance: InstanceJSON): string {
-  if (instance.appSpec.routing?.enabled) {
+  // Single source of truth: appSpec.layout
+  if (instance.appSpec.layout === 'routed') {
     return generateRoutedApp(instance);
   } else {
     return generateSinglePageApp(instance);
@@ -686,12 +781,12 @@ describe('App', () => {
 ```typescript
 import prettier from 'prettier';
 
-export function formatFiles(files: Record<string, string>): Record<string, string> {
+export async function formatFiles(files: Record<string, string>): Promise<Record<string, string>> {
   const formatted: Record<string, string> = {};
 
   for (const [path, content] of Object.entries(files)) {
     if (shouldFormat(path)) {
-      formatted[path] = formatCode(content, path);
+      formatted[path] = await formatCode(content, path);
     } else {
       formatted[path] = content;
     }
@@ -704,9 +799,10 @@ function shouldFormat(path: string): boolean {
   return /\.(ts|tsx|js|jsx|json|css|html)$/.test(path);
 }
 
-function formatCode(code: string, path: string): string {
+async function formatCode(code: string, path: string): Promise<string> {
   const parser = getParser(path);
-  return prettier.format(code, {
+  // Prettier v3 format() is async
+  return await prettier.format(code, {
     parser,
     semi: true,
     singleQuote: true,
