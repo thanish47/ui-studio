@@ -11,6 +11,9 @@ This folder contains all implementation documentation for the UI Studio project.
 - **[app_design.md](app_design.md)** - Detailed folder structure and architecture explanation
 - **[../plan.md](../plan.md)** - Complete reference plan with all specifications
 
+### Design
+- **[UX_Plan.md](UX_Plan.md)** - ⚠️ **Critical before Milestone 2!** Three-panel layout design, keyboard shortcuts, design system, and component specifications
+
 ### Implementation Milestones
 
 Each milestone document contains:
@@ -66,8 +69,9 @@ Each milestone document contains:
 1. **Read** [implementation-overview.md](implementation-overview.md) for the big picture
 2. **Review** [../plan.md](../plan.md) for architectural decisions
 3. **Start** with [milestone-1-core-persistence.md](milestone-1-core-persistence.md)
-4. **Work through** milestones sequentially (1 → 2 → 3 → 4)
-5. **Optionally add** Milestone 5 (LLM) after completing MVP
+4. **⚠️ Before Week 2:** Review [UX_Plan.md](UX_Plan.md) and complete UX mockups
+5. **Work through** milestones sequentially (1 → 2 → 3 → 4)
+6. **Optionally add** Milestone 5 (LLM) after completing MVP
 
 ---
 

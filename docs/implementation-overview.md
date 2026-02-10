@@ -47,6 +47,8 @@
 ### Milestone 2: Builder UI
 **Duration:** ~2 weeks (84 hours)
 
+**⚠️ IMPORTANT: Review [UX_Plan.md](UX_Plan.md) before starting this milestone**
+
 **What You'll Build:**
 - Tree editor with virtualization (handles 1000+ nodes)
 - Spec editors for all types (component, service, context, folder)
@@ -190,6 +192,7 @@
 
 ### Phase 3: Builder (Weeks 2-3)
 **Milestone 2: Builder UI**
+- **⚠️ Before Week 2:** Complete UX mockups based on [UX_Plan.md](UX_Plan.md)
 - Build tree editor
 - Create spec editors
 - Add UIBlock editor
@@ -327,6 +330,7 @@ ui-studio/
 ├── docs/                       # Documentation
 │   ├── app_design.md
 │   ├── implementation-overview.md
+│   ├── UX_Plan.md
 │   ├── milestone-1-core-persistence.md
 │   ├── milestone-2-builder.md
 │   ├── milestone-3-preview.md
@@ -361,10 +365,11 @@ ui-studio/
 ## Next Steps
 
 1. **Read [plan.md](../plan.md)** for full architectural details
-2. **Start with [Milestone 1](milestone-1-core-persistence.md)**
-3. Work through milestones sequentially
-4. Test thoroughly after each milestone
-5. Deploy MVP after Milestone 4
+2. **Read [UX_Plan.md](UX_Plan.md)** for design specifications (critical before Milestone 2)
+3. **Start with [Milestone 1](milestone-1-core-persistence.md)**
+4. Work through milestones sequentially
+5. Test thoroughly after each milestone
+6. Deploy MVP after Milestone 4
 
 ---
 

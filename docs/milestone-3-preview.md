@@ -6,6 +6,7 @@ Build the spec-driven preview renderer that displays UI from ComponentSpecJSON w
 ## Prerequisites
 - Milestone 1 completed (Core & Persistence)
 - Milestone 2 completed (Builder UI)
+- **💡 Design Reference: See [UX_Plan.md](UX_Plan.md) Section 3 (Preview Panel)** for preview panel design specifications
 
 ## Goals
 - Create recursive UIBlock renderer
@@ -13,6 +14,11 @@ Build the spec-driven preview renderer that displays UI from ComponentSpecJSON w
 - Add error boundaries for preview
 - Provide mock data for props, services, and contexts
 - Support component preview and app shell preview
+- **🎯 UX Enhancements (based on 2025 trends):**
+  - Interactive preview with clickable buttons and inputs
+  - Viewport switcher (mobile/tablet/desktop)
+  - State visualization and manual controls
+  - Event log for tracking interactions
 
 ---
 
@@ -256,49 +262,59 @@ export * from './Alert';
 
 #### 2.1 `renderer.tsx` - Recursive UIBlock renderer
 ```typescript
-export function UIBlockRenderer({ block, context }: Props) {
+import { useRenderContext } from './renderContext';
+
+export function UIBlockRenderer({ block, onEvent }: Props) {
+  // Get context from provider (fixes issue #6)
+  const context = useRenderContext();
+
   // Resolve bindings (e.g., {user.name} → actual value from context)
   const resolvedProps = resolveBindings(block, context);
+
+  // Wrap event handlers to track interactions (UX Trend #5)
+  const wrappedProps = onEvent
+    ? wrapEventHandlers(resolvedProps, onEvent, block.type)
+    : resolvedProps;
 
   switch (block.type) {
     case 'Stack':
       return (
-        <Stack {...resolvedProps}>
+        <Stack {...wrappedProps}>
           {block.children?.map((child, i) => (
-            <UIBlockRenderer key={i} block={child} context={context} />
+            <UIBlockRenderer key={i} block={child} onEvent={onEvent} />
           ))}
         </Stack>
       );
 
     case 'Card':
       return (
-        <Card {...resolvedProps}>
+        <Card {...wrappedProps}>
           {block.children?.map((child, i) => (
-            <UIBlockRenderer key={i} block={child} context={context} />
+            <UIBlockRenderer key={i} block={child} onEvent={onEvent} />
           ))}
         </Card>
       );
 
     case 'Heading':
-      return <Heading {...resolvedProps} />;
+      return <Heading {...wrappedProps} />;
 
     case 'Text':
-      return <Text {...resolvedProps} />;
+      return <Text {...wrappedProps} />;
 
     case 'Button':
-      return <Button {...resolvedProps} />;
+      return <Button {...wrappedProps} />;
 
     case 'Input':
-      return <Input {...resolvedProps} />;
+      return <Input {...wrappedProps} />;
 
     case 'Select':
-      return <Select {...resolvedProps} />;
+      return <Select {...wrappedProps} />;
 
     case 'Table':
-      return <Table {...resolvedProps} />;
+      return <Table {...wrappedProps} />;
 
     case 'Alert':
-      return <Alert {...resolvedProps} />;
+      return <Alert {...wrappedProps} />;
 
     default:
       console.warn(`Unknown block type: ${block.type}`);
@@ -326,15 +342,77 @@ export function resolveBindings(block: UIBlock, context: RenderContext): any {
 export function getValueByPath(obj: any, path: string): any {
   return path.split('.').reduce((acc, part) => acc?.[part], obj);
 }
+
+/**
+ * Wraps event handlers to track interactions in event log (UX Trend #5)
+ */
+function wrapEventHandlers(
+  props: any,
+  onEvent: (event: { type: string; timestamp: number; data?: any }) => void,
+  blockType: string
+): any {
+  const wrapped = { ...props };
+
+  // Wrap onClick
+  if (wrapped.onClick) {
+    const original = wrapped.onClick;
+    wrapped.onClick = (e: any) => {
+      onEvent({ type: 'click', timestamp: Date.now(), data: { blockType } });
+      original(e);
+    };
+  }
+
+  // Wrap onChange (for inputs)
+  if (wrapped.onChange) {
+    const original = wrapped.onChange;
+    wrapped.onChange = (e: any) => {
+      onEvent({ type: 'change', timestamp: Date.now(), data: { blockType, value: e.target.value } });
+      original(e);
+    };
+  }
+
+  // Wrap onSubmit (for forms)
+  if (wrapped.onSubmit) {
+    const original = wrapped.onSubmit;
+    wrapped.onSubmit = (e: any) => {
+      onEvent({ type: 'submit', timestamp: Date.now(), data: { blockType } });
+      original(e);
+    };
+  }
+
+  return wrapped;
+}
 ```
 
-#### 2.3 `types.ts` - Preview types
+#### 2.3 `renderContext.ts` - Render context (NEW - fixes issue #6)
 ```typescript
+import { createContext, useContext } from 'react';
+
 export interface RenderContext {
   props: Record<string, any>;
   state: Record<string, any>;
   contexts: Record<string, any>;
   services: Record<string, any>;
+}
+
+// Create React context with default empty values
+export const RenderContext = createContext<RenderContext>({
+  props: {},
+  state: {},
+  contexts: {},
+  services: {},
+});
+
+// Helper hook to consume render context
+export function useRenderContext(): RenderContext {
+  return useContext(RenderContext);
+}
+
+// Helper function to get current render context (for backwards compatibility)
+export function getRenderContext(): RenderContext {
+  // This should be called inside a component using the hook
+  // For use in examples, we return the hook
+  return useRenderContext();
 }
 ```
 
@@ -478,18 +556,59 @@ export class PreviewErrorBoundary extends React.Component<Props, State> {
 #### 5.1 `ComponentPreview.tsx` - Preview single component
 ```typescript
 export function ComponentPreview({ instance, component }: Props) {
+  // Interactive preview state (UX Trend #5)
+  const [viewport, setViewport] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+
+  // Transform localState (StateDef[]) to runtime state object (fixes issue #8)
+  const initialState = useMemo(() => {
+    const state: Record<string, any> = {};
+    component.localState?.forEach((def) => {
+      state[def.name] = def.initialValue;
+    });
+    return state;
+  }, [component.localState]);
+
+  const [componentState, setComponentState] = useState(initialState);
+  const [eventLog, setEventLog] = useState<EventLogEntry[]>([]);
+
+  const logEvent = (eventName: string, details: any) => {
+    setEventLog(prev => [...prev, { timestamp: Date.now(), eventName, details }]);
+  };
+
   return (
     <div className="component-preview">
-      <PreviewHeader component={component} />
+      {/* Enhanced header with viewport switcher (UX Trend #5) */}
+      <PreviewHeader
+        component={component}
+        viewport={viewport}
+        onViewportChange={setViewport}
+      />
+
+      {/* State controls (UX Trend #5) - fixes issue #8 */}
+      <StateControls
+        stateDefs={component.localState || []}
+        stateValues={componentState}
+        onStateChange={setComponentState}
+      />
+
       <PreviewErrorBoundary>
         <MockProvider instance={instance} component={component}>
-          <div className="preview-canvas">
+          {/* Viewport wrapper with responsive sizing */}
+          <div className={`preview-canvas viewport-${viewport}`}>
             {component.ui.map((block, i) => (
-              <UIBlockRenderer key={i} block={block} context={getRenderContext()} />
+              <UIBlockRenderer
+                key={i}
+                block={block}
+                onEvent={logEvent}  // Track interactions (UX Trend #5)
+              />
             ))}
           </div>
         </MockProvider>
       </PreviewErrorBoundary>
+
+      {/* Event log (UX Trend #5) */}
+      <EventLog events={eventLog} />
+
       <PreviewFooter />
     </div>
   );
@@ -503,7 +622,7 @@ export function AppPreview({ instance }: Props) {
 
   return (
     <div className="app-preview">
-      <PreviewHeader instance={instance} />
+      <AppPreviewHeader instance={instance} />
       <PreviewErrorBoundary>
         <MockProvider instance={instance} component={getRootComponent()}>
           <div className="preview-canvas">
@@ -524,16 +643,158 @@ export function AppPreview({ instance }: Props) {
 }
 ```
 
-#### 5.3 `PreviewHeader.tsx` - Preview toolbar
+#### 5.3 `PreviewHeader.tsx` - Preview toolbar (UPDATED - fixes issue #7)
 ```typescript
-export function PreviewHeader({ component }: Props) {
+// Component preview header with viewport switcher
+export function PreviewHeader({ component, viewport, onViewportChange }: {
+  component: ComponentSpecJSON;
+  viewport: 'mobile' | 'tablet' | 'desktop';
+  onViewportChange: (viewport: 'mobile' | 'tablet' | 'desktop') => void;
+}) {
   return (
     <div className="preview-header">
       <h4>Preview: {component.name}</h4>
-      <button onClick={handleRefresh}>Refresh</button>
-      <button onClick={handleFullscreen}>Fullscreen</button>
+
+      {/* Viewport switcher (UX Trend #5) */}
+      <div className="viewport-switcher">
+        <button
+          className={viewport === 'mobile' ? 'active' : ''}
+          onClick={() => onViewportChange('mobile')}
+          title="Mobile (375px)"
+        >
+          📱 Mobile
+        </button>
+        <button
+          className={viewport === 'tablet' ? 'active' : ''}
+          onClick={() => onViewportChange('tablet')}
+          title="Tablet (768px)"
+        >
+          📱 Tablet
+        </button>
+        <button
+          className={viewport === 'desktop' ? 'active' : ''}
+          onClick={() => onViewportChange('desktop')}
+          title="Desktop (1440px)"
+        >
+          🖥 Desktop
+        </button>
+      </div>
+
+      <button onClick={handleRefresh}>⟳ Refresh</button>
+      <button onClick={handleFullscreen}>⛶ Fullscreen</button>
     </div>
   );
+}
+
+// App preview header (separate component to avoid props mismatch - fixes issue #7)
+export function AppPreviewHeader({ instance }: { instance: InstanceJSON }) {
+  return (
+    <div className="preview-header">
+      <h4>App Preview: {instance.name}</h4>
+      <div className="preview-metadata">
+        <span>Layout: {instance.appSpec.layout}</span>
+        <span>Components: {instance.components.length}</span>
+      </div>
+      <button onClick={handleRefresh}>⟳ Refresh</button>
+      <button onClick={handleFullscreen}>⛶ Fullscreen</button>
+    </div>
+  );
+}
+```
+
+#### 5.4 `StateControls.tsx` - Manual state controls (UPDATED - fixes issue #8)
+```typescript
+interface StateControlsProps {
+  stateDefs: StateDef[];  // Metadata from component.localState
+  stateValues: Record<string, any>;  // Runtime state object
+  onStateChange: (newState: Record<string, any>) => void;
+}
+
+export function StateControls({ stateDefs, stateValues, onStateChange }: StateControlsProps) {
+  if (!stateDefs || stateDefs.length === 0) return null;
+
+  function updateState(name: string, value: any) {
+    onStateChange({ ...stateValues, [name]: value });
+  }
+
+  return (
+    <div className="state-controls">
+      <h5>State Controls</h5>
+      {stateDefs.map((stateDef) => (
+        <div key={stateDef.name} className="state-control">
+          <label>{stateDef.name}:</label>
+          {stateDef.type === 'boolean' ? (
+            <input
+              type="checkbox"
+              checked={stateValues[stateDef.name] || false}
+              onChange={(e) => updateState(stateDef.name, e.target.checked)}
+            />
+          ) : stateDef.type === 'string' ? (
+            <input
+              type="text"
+              value={stateValues[stateDef.name] || ''}
+              onChange={(e) => updateState(stateDef.name, e.target.value)}
+            />
+          ) : stateDef.type === 'number' ? (
+            <input
+              type="number"
+              value={stateValues[stateDef.name] || 0}
+              onChange={(e) => updateState(stateDef.name, Number(e.target.value))}
+            />
+          ) : (
+            <input
+              type="text"
+              value={JSON.stringify(stateValues[stateDef.name])}
+              onChange={(e) => {
+                try {
+                  updateState(stateDef.name, JSON.parse(e.target.value));
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+#### 5.5 `EventLog.tsx` - Track user interactions (NEW - UX Trend #5)
+```typescript
+export function EventLog({ events }: Props) {
+  if (events.length === 0) return null;
+
+  return (
+    <div className="event-log">
+      <h5>Events Log</h5>
+      <div className="event-list">
+        {events.slice(-10).reverse().map((event, i) => (
+          <div key={i} className="event-item">
+            <span className="timestamp">
+              {new Date(event.timestamp).toLocaleTimeString()}
+            </span>
+            <span className="event-name">{event.eventName}</span>
+            <code className="event-details">
+              {JSON.stringify(event.details)}
+            </code>
+          </div>
+        ))}
+      </div>
+      {events.length > 10 && (
+        <div className="event-count">
+          Showing last 10 of {events.length} events
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface EventLogEntry {
+  timestamp: number;
+  eventName: string;
+  details: any;
 }
 ```
 
@@ -703,6 +964,7 @@ export function PreviewPanel({ instance, selectedNodeId }: Props) {
 
 ## Definition of Done
 
+### Core Features
 - [ ] All 9 primitives implemented and styled
 - [ ] Recursive UIBlock rendering works
 - [ ] State binding resolution correct
@@ -716,9 +978,18 @@ export function PreviewPanel({ instance, selectedNodeId }: Props) {
 - [ ] Styling polished
 - [ ] Documentation updated
 
+### UX Enhancements (2025 Trends)
+- [ ] **Interactive preview** - Buttons clickable, inputs functional
+- [ ] **Viewport switcher** - Mobile (375px) / Tablet (768px) / Desktop (1440px)
+- [ ] **State controls** - Manual state manipulation
+- [ ] **Event log** - Track interactions (last 10 events)
+- [ ] **Responsive canvas** - Viewport-specific sizing with CSS classes
+
 ---
 
 ## Estimated Effort
+
+### Core Implementation
 - Primitives: 12 hours
 - UIBlock renderer: 8 hours
 - Binding resolution: 6 hours
@@ -728,6 +999,15 @@ export function PreviewPanel({ instance, selectedNodeId }: Props) {
 - App preview: 8 hours
 - Preview panel integration: 4 hours
 - Styling: 6 hours
+
+### UX Enhancements (NEW)
+- Viewport switcher: 2 hours
+- State controls component: 3 hours
+- Event log component: 2 hours
+- Interactive event handling: 3 hours
+- Responsive viewport CSS: 2 hours
 - Testing: 8 hours
 
-**Total: ~70 hours (1.5 weeks)**
+**Total: ~82 hours (2 weeks)**
+
+**Note:** Original estimate was 70 hours. UX enhancements add 12 hours for interactive preview capabilities aligned with 2025 UI builder trends.

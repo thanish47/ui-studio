@@ -5,6 +5,11 @@ Build the interactive builder interface where users create and edit their applic
 
 ## Prerequisites
 - Milestone 1 completed (Core & Persistence)
+- **⚠️ IMPORTANT: Review [UX_Plan.md](UX_Plan.md) before starting this milestone**
+  - Contains detailed design specifications for the three-panel layout
+  - Includes component breakdowns, keyboard shortcuts, and responsive behavior
+  - Defines color scheme, typography, and design system
+  - **Critical:** Complete UX mockups/wireframes before Week 2 implementation
 
 ## Goals
 - Create tree editor with virtualization for performance
@@ -12,6 +17,11 @@ Build the interactive builder interface where users create and edit their applic
 - Implement mock data editor
 - Add validation feedback UI
 - Create navigation and layout
+- **🎯 UX Enhancements (based on 2025 trends):**
+  - Keyboard-first navigation with comprehensive shortcuts
+  - Progressive disclosure in editors (collapsible sections)
+  - Smart assistance with inline fix buttons
+  - Shortcut hint overlay (press "?" key)
 
 ---
 
@@ -122,6 +132,25 @@ export function BuilderPage() {
   const { instanceId } = useParams();
   const [instance, setInstance] = useState<InstanceJSON | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Show shortcuts overlay with "?"
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowShortcuts(true);
+      }
+      // ESC to close shortcuts
+      if (e.key === 'Escape' && showShortcuts) {
+        setShowShortcuts(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showShortcuts]);
 
   return (
     <div className="builder-layout">
@@ -142,6 +171,11 @@ export function BuilderPage() {
           selectedNodeId={selectedNodeId}
         />
       </div>
+
+      {/* Keyboard shortcuts overlay (UX Trend #1) */}
+      {showShortcuts && (
+        <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />
+      )}
     </div>
   );
 }
@@ -278,10 +312,25 @@ export function EditorPanel({ instance, selectedNodeId, onUpdate }: Props) {
 ```typescript
 export function ComponentEditor({ spec, onUpdate }: Props) {
   const [localSpec, setLocalSpec] = useState(spec);
+  // Progressive disclosure: track expanded sections (UX Trend #3)
+  const [expandedSections, setExpandedSections] = useState({
+    basic: true,  // Always expanded
+    props: true,
+    state: false,  // Collapsed by default
+    events: false,
+    contexts: false,
+    ui: true,
+    advanced: false,
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   return (
     <div className="component-editor">
-      <section>
+      {/* Basic Info - Always visible */}
+      <section className="always-expanded">
         <h3>Basic Info</h3>
         <input
           type="text"
@@ -290,42 +339,81 @@ export function ComponentEditor({ spec, onUpdate }: Props) {
         />
       </section>
 
-      <section>
-        <h3>Props</h3>
-        <PropsEditor props={localSpec.props} onChange={updateProps} />
+      {/* Props - Collapsible */}
+      <section className="collapsible">
+        <h3 onClick={() => toggleSection('props')}>
+          {expandedSections.props ? '▼' : '▶'} Props ({localSpec.props.length})
+        </h3>
+        {expandedSections.props && (
+          <PropsEditor props={localSpec.props} onChange={updateProps} />
+        )}
       </section>
 
-      <section>
-        <h3>State</h3>
-        <StateEditor state={localSpec.localState} onChange={updateState} />
+      {/* State - Collapsible */}
+      <section className="collapsible">
+        <h3 onClick={() => toggleSection('state')}>
+          {expandedSections.state ? '▼' : '▶'} State ({localSpec.localState.length})
+        </h3>
+        {expandedSections.state && (
+          <StateEditor state={localSpec.localState} onChange={updateState} />
+        )}
       </section>
 
-      <section>
-        <h3>Events</h3>
-        <EventsEditor events={localSpec.events} onChange={updateEvents} />
+      {/* Events - Collapsible */}
+      <section className="collapsible">
+        <h3 onClick={() => toggleSection('events')}>
+          {expandedSections.events ? '▼' : '▶'} Events ({localSpec.events?.length || 0})
+        </h3>
+        {expandedSections.events && (
+          <EventsEditor events={localSpec.events} onChange={updateEvents} />
+        )}
       </section>
 
-      <section>
-        <h3>Contexts</h3>
-        <ContextSelector
-          selected={localSpec.consumesContexts}
-          available={getAvailableContexts()}
-          onChange={updateContexts}
-        />
+      {/* Contexts - Collapsible */}
+      <section className="collapsible">
+        <h3 onClick={() => toggleSection('contexts')}>
+          {expandedSections.contexts ? '▼' : '▶'} Contexts ({localSpec.consumesContexts?.length || 0})
+        </h3>
+        {expandedSections.contexts && (
+          <ContextSelector
+            selected={localSpec.consumesContexts}
+            available={getAvailableContexts()}
+            onChange={updateContexts}
+          />
+        )}
       </section>
 
-      <section>
-        <h3>UI Layout</h3>
-        <UIBlockEditor blocks={localSpec.ui} onChange={updateUI} />
+      {/* UI Layout - Expanded by default */}
+      <section className="collapsible">
+        <h3 onClick={() => toggleSection('ui')}>
+          {expandedSections.ui ? '▼' : '▶'} UI Layout
+        </h3>
+        {expandedSections.ui && (
+          <UIBlockEditor blocks={localSpec.ui} onChange={updateUI} />
+        )}
       </section>
 
-      <section>
-        <h3>Test Level</h3>
-        <select value={localSpec.testLevel} onChange={updateTestLevel}>
-          <option value="none">None</option>
-          <option value="smoke">Smoke</option>
-          <option value="full">Full</option>
-        </select>
+      {/* Advanced - Collapsed by default (UX Trend #3) */}
+      <section className="collapsible advanced">
+        <h3 onClick={() => toggleSection('advanced')}>
+          {expandedSections.advanced ? '▼' : '▶'} Advanced
+        </h3>
+        {expandedSections.advanced && (
+          <>
+            <div className="form-group">
+              <label>Test Level</label>
+              <select value={localSpec.testLevel} onChange={updateTestLevel}>
+                <option value="none">None</option>
+                <option value="smoke">Smoke</option>
+                <option value="full">Full</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Performance Hints</label>
+              <input type="checkbox" /> Memoize props
+            </div>
+          </>
+        )}
       </section>
     </div>
   );
@@ -545,7 +633,76 @@ export function ValidationError({ error }: Props) {
         <p>{error.message}</p>
         {error.path && <code>{error.path}</code>}
       </div>
-      {error.fix && <button onClick={error.fix}>Fix</button>}
+      {/* Smart assistance: inline fix button (UX Trend #2) */}
+      {error.fix && (
+        <button
+          className="fix-button"
+          onClick={error.fix}
+          title="Click to automatically fix this issue"
+        >
+          Fix
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+#### 7.3 `ShortcutsOverlay.tsx` - Keyboard shortcuts help (NEW - UX Trend #1)
+```typescript
+export function ShortcutsOverlay({ onClose }: Props) {
+  return (
+    <div className="shortcuts-overlay" onClick={onClose}>
+      <div className="shortcuts-content" onClick={(e) => e.stopPropagation()}>
+        <h2>Keyboard Shortcuts</h2>
+
+        <section>
+          <h3>Global</h3>
+          <ShortcutItem keys={['Cmd', 'K']} description="Open command palette" />
+          <ShortcutItem keys={['Cmd', 'S']} description="Force save" />
+          <ShortcutItem keys={['Cmd', 'Z']} description="Undo" />
+          <ShortcutItem keys={['Cmd', 'Shift', 'Z']} description="Redo" />
+          <ShortcutItem keys={['Cmd', 'F']} description="Focus search" />
+          <ShortcutItem keys={['Cmd', 'N']} description="New component" />
+          <ShortcutItem keys={['Cmd', 'E']} description="Export as ZIP" />
+          <ShortcutItem keys={['Cmd', ',']} description="Open settings" />
+          <ShortcutItem keys={['?']} description="Show this help" />
+        </section>
+
+        <section>
+          <h3>Navigation</h3>
+          <ShortcutItem keys={['↑', '↓']} description="Navigate tree" />
+          <ShortcutItem keys={['←', '→']} description="Collapse/expand tree node" />
+          <ShortcutItem keys={['Enter']} description="Edit selected item" />
+          <ShortcutItem keys={['Delete']} description="Delete selected item" />
+          <ShortcutItem keys={['Cmd', 'B']} description="Toggle tree panel" />
+          <ShortcutItem keys={['Cmd', 'Shift', 'P']} description="Toggle preview panel" />
+        </section>
+
+        <section>
+          <h3>Editor</h3>
+          <ShortcutItem keys={['Tab']} description="Next field" />
+          <ShortcutItem keys={['Shift', 'Tab']} description="Previous field" />
+          <ShortcutItem keys={['Cmd', 'Enter']} description="Add new item" />
+        </section>
+
+        <button onClick={onClose} className="close-button">
+          Close (ESC)
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ShortcutItem({ keys, description }: { keys: string[], description: string }) {
+  return (
+    <div className="shortcut-item">
+      <div className="keys">
+        {keys.map((key, i) => (
+          <kbd key={i}>{key}</kbd>
+        ))}
+      </div>
+      <span className="description">{description}</span>
     </div>
   );
 }
@@ -669,6 +826,7 @@ export function useLock(instanceId: string) {
 
 ## Definition of Done
 
+### Core Features
 - [ ] Tree editor displays full hierarchy
 - [ ] Virtualization handles 1000+ nodes
 - [ ] All spec editors functional
@@ -681,9 +839,19 @@ export function useLock(instanceId: string) {
 - [ ] Responsive UI
 - [ ] Documentation updated
 
+### UX Enhancements (2025 Trends)
+- [ ] **Keyboard-first navigation** - All 20+ shortcuts working
+- [ ] **Shortcut overlay** - "?" key shows help
+- [ ] **Progressive disclosure** - Collapsible sections in editors
+- [ ] **Smart assistance** - Inline "Fix" buttons on validation errors
+- [ ] **Visual feedback** - Keyboard hints on hover
+- [ ] **Command palette** - Cmd+K opens quick actions
+
 ---
 
 ## Estimated Effort
+
+### Core Implementation
 - Tree utilities: 8 hours
 - Builder layout: 4 hours
 - Tree editor: 12 hours
@@ -694,4 +862,13 @@ export function useLock(instanceId: string) {
 - Custom hooks: 6 hours
 - Testing: 10 hours
 
-**Total: ~84 hours (2 weeks)**
+### UX Enhancements (NEW)
+- Keyboard shortcuts handler: 3 hours
+- Shortcuts overlay component: 2 hours
+- Progressive disclosure (collapsible sections): 4 hours
+- Smart assistance (inline fixes): 2 hours
+- Command palette: 3 hours
+
+**Total: ~98 hours (2.5 weeks)**
+
+**Note:** Original estimate was 84 hours. UX enhancements add 14 hours but provide significant usability improvements aligned with 2025 industry trends.

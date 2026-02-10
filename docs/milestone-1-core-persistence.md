@@ -90,6 +90,7 @@ export interface AppSpecJSON {
 export interface ComponentSpecJSON {
   id: string;
   name: string;
+  parentId?: string;  // Optional parent folder ID for feature organization
   props: PropDef[];
   events?: EventDef[];
   localState?: StateDef[];
@@ -451,7 +452,11 @@ export function HomePage() {
       components: [],
       services: [],
       contexts: [],
-      mocks: {},
+      mocks: {
+        components: {},
+        services: {},
+        contexts: {},
+      },
     };
 
     const repo = new InstanceRepository(await initDatabase());

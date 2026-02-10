@@ -318,12 +318,17 @@ function generateImports(spec: ComponentSpecJSON, instance: InstanceJSON): strin
     imports.push("import { useState } from 'react';");
   }
 
-  // Add context imports
+  // Calculate relative path to contexts based on component location
+  const contextPath = spec.parentId
+    ? '../../../contexts'  // from src/features/{folder}/components
+    : '../contexts';       // from src/components
+
+  // Add context imports with correct relative path
   if (spec.consumesContexts && spec.consumesContexts.length > 0) {
     spec.consumesContexts.forEach((contextId) => {
       const context = instance.contexts.find((c) => c.id === contextId);
       if (context) {
-        imports.push(`import { ${context.name} } from '../contexts/${context.name}';`);
+        imports.push(`import { ${context.name} } from '${contextPath}/${context.name}';`);
         imports.push("import { useContext } from 'react';");
       }
     });
@@ -710,15 +715,28 @@ function generateSinglePageApp(instance: InstanceJSON): string {
 }
 
 function generateRoutedApp(instance: InstanceJSON): string {
-  // Generate routes based on routing config
+  const rootComponent = findRootComponent(instance);
+  const rootComponentName = rootComponent ? rootComponent.name : 'div';
+
+  // Generate routes based on appSpec.routes or use root component at "/"
+  const routes = instance.appSpec.routes && instance.appSpec.routes.length > 0
+    ? instance.appSpec.routes.map(r => `<Route path="${r.path}" element={<${r.component} />} />`).join('\n        ')
+    : `<Route path="/" element={<${rootComponentName} />} />`;
+
   return `return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        {/* Add more routes */}
+        ${routes}
       </Routes>
     </BrowserRouter>
   );`;
+}
+
+function findRootComponent(instance: InstanceJSON): ComponentSpecJSON | null {
+  // Find the component marked as root, or first component
+  return instance.components.find(c => c.id === instance.appSpec.rootComponentId)
+    || instance.components[0]
+    || null;
 }
 ```
 
@@ -877,9 +895,9 @@ export function ExportDialog({ instance, onClose }: Props) {
         return;
       }
 
-      // Generate file tree
+      // Generate file tree (async in Prettier v3)
       setProgress(30);
-      const files = generateFileTree(instance);
+      const files = await generateFileTree(instance);
 
       // Create ZIP
       setProgress(70);
