@@ -7,6 +7,10 @@ import { migrations } from './registry';
 import { CURRENT_SCHEMA_VERSION } from './types';
 import { validateInstance } from '../validation';
 import type { InstanceJSON } from '../schema';
+import type { MigrationFn } from './types';
+
+// Re-export for tests
+export { CURRENT_SCHEMA_VERSION };
 
 /**
  * Migrate instance from any version to current version
@@ -67,4 +71,11 @@ export function getMigrationPath(fromVersion: number): number[] {
     }
   }
   return path;
+}
+
+/**
+ * Register a new migration (for testing purposes)
+ */
+export function registerMigration(version: number, fn: MigrationFn): void {
+  migrations[version] = fn;
 }
