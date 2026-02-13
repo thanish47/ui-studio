@@ -1,0 +1,50 @@
+/* Home page styles */
+
+.home-page {
+  min-height: 100vh;
+  background-color: var(--color-bg-secondary);
+}
+
+.home-header {
+  background-color: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-xl);
+  text-align: center;
+}
+
+.home-header h1 {
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-primary);
+}
+
+.home-header .subtitle {
+  color: var(--color-text-secondary);
+  font-size: 1.125rem;
+}
+
+.home-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-xl);
+}
+
+.actions-bar {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl) * 3;
+}
+
+.empty-state h2 {
+  margin-bottom: var(--spacing-md);
+  color: var(--color-text-secondary);
+}
+
+.empty-state p {
+  margin-bottom: var(--spacing-xl);
+  color: var(--color-text-muted);
+}
