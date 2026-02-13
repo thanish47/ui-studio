@@ -9,6 +9,9 @@ import type { ComponentSpecJSON } from './componentSpec';
 import type { ServiceSpecJSON } from './serviceSpec';
 import type { ContextSpec } from './contextSpec';
 
+// Re-export for convenience
+export type { AppSpecJSON, FolderSpecJSON, ComponentSpecJSON, ServiceSpecJSON, ContextSpec };
+
 /**
  * Root instance JSON structure
  * Represents a complete UI Studio project

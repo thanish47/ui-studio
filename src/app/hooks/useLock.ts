@@ -2,7 +2,7 @@
  * Hook for managing instance lock (prevent concurrent edits)
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { initDatabase } from '@/core/idb';
 import { LockManager } from '@/core/locks';
 

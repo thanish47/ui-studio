@@ -3,7 +3,7 @@
  */
 
 import type { InstanceJSON, ComponentSpecJSON, FolderSpecJSON } from '../schema/types';
-import type { TreeNode, NodeSpec } from './tree';
+import type { NodeSpec } from './tree';
 import { Tree } from './tree';
 
 /**
@@ -183,8 +183,8 @@ export function duplicateNode(instance: InstanceJSON, id: string): InstanceJSON 
  */
 export function reorderChildren(
   instance: InstanceJSON,
-  parentId: string | null,
-  childIds: string[]
+  _parentId: string | null,
+  _childIds: string[]
 ): InstanceJSON {
   // This would be used for drag-and-drop reordering
   // Implementation depends on how we want to store order

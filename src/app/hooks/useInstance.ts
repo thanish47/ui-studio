@@ -72,7 +72,7 @@ export function useInstance(instanceId: string) {
 
   // Auto-save with debounce (optional - can be enabled in BuilderPage)
   const autoSave = useCallback(
-    async (debounceMs: number = 2000) => {
+    async (_debounceMs: number = 2000) => {
       if (!instance) return;
 
       // Debounce logic would go here
